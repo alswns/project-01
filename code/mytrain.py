@@ -56,5 +56,24 @@ def train_one_epoch(model, optimizer, dataloader, device):
         dict {"loss": ..., "recon": ..., "kl": ...} of Python floats: the
         average of each term per image over the whole epoch.
     """
-    # TODO
-    raise NotImplementedError("mytrain.py: train_one_epoch is not implemented")
+    model.train()
+    n=0
+    total_loss = 0
+    total_recon = 0
+    total_kl = 0
+    for x in dataloader:
+        x=x.to(device)
+        x_hat,mu,logvar = model(x)
+        loss, recon, kl = loss_function(x,x_hat,mu,logvar)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        Batch_size = x.size(0)
+        total_loss += loss.item() * Batch_size
+        total_recon += recon.item() * Batch_size
+        total_kl += kl.item() * Batch_size
+        n += B
+
+    return {"loss": total_loss / n, "recon": total_recon / n, "kl": total_kl / n}
+
