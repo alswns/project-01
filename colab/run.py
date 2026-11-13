@@ -7,7 +7,6 @@ Files in colab/v/<variant>/ shadow the ones in code/.
 import os, sys, time, json
 import warnings; warnings.filterwarnings("ignore")
 import torch
-from torch.utils.data import DataLoader
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 variant = sys.argv[1]; seed = int(sys.argv[2]) if len(sys.argv) > 2 else 0
@@ -20,7 +19,21 @@ from data import get_dataset
 from fastfid import evaluate
 torch.manual_seed(seed)
 dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-loader = DataLoader(get_dataset("train"), batch_size=BATCH_SIZE, shuffle=True)
+torch.set_num_threads(1)
+torch.backends.cudnn.benchmark = True
+
+
+class GPULoader:
+    """Shuffled mini-batches of a dataset kept on the device (same as DataLoader(shuffle=True))."""
+    def __init__(self, x, bs): self.x, self.bs = x, bs
+    def __len__(self): return (len(self.x) + self.bs - 1) // self.bs
+    def __iter__(self):
+        idx = torch.randperm(len(self.x), device=self.x.device)
+        for i in range(0, len(self.x), self.bs):
+            yield self.x[idx[i:i + self.bs]]
+
+
+loader = GPULoader(get_dataset("train").images.float().to(dev), BATCH_SIZE)
 model = VAE().to(dev); opt = get_optimizer(model)
 t = time.time()
 for e in range(NUM_EPOCHS):
