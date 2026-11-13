@@ -29,8 +29,25 @@ class VAE(nn.Module):
         Must set `self.latent_dim` (int, at least 2): the dimension of z.
         """
         super().__init__()
-        # TODO: set self.latent_dim and define the layers
-        raise NotImplementedError("mymodel.py: VAE.__init__ is not implemented")
+        self.latent_dim = 16
+        # 인코더
+        self.encoder=nn.nn.Sequential(
+            nn.Conv2d(1, 32, 4, 2, 1),   nn.ReLU(),   
+            nn.Conv2d(32, 64, 4, 2, 1),  nn.ReLU(),   
+            nn.Conv2d(64, 128, 4, 2, 1), nn.ReLU(),   
+            nn.Flatten(),                              
+        )
+        self.head_mu = nn.nn.Linear(128*4*4,self.latent_dim)
+        self.head_logvar = nn.Linear(128 * 4 * 4, self.latent_dim)
+
+        self.decoder_align = nn.Linear( self.latent_dim,128 * 4 * 4)
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(128, 64, 4, 2, 1), nn.ReLU(),   
+            nn.ConvTranspose2d(64, 32, 4, 2, 1),  nn.ReLU(),   
+            nn.ConvTranspose2d(32, 1, 4, 2, 1),   nn.Sigmoid() 
+        )
+
+        
 
     def encode(self, x):
         """Encoder: parameters of q(z|x) = N(z; mu, diag(exp(logvar))).
@@ -41,8 +58,12 @@ class VAE(nn.Module):
         Returns:
             (mu, logvar), each of shape (B, latent_dim).
         """
-        # TODO
-        raise NotImplementedError("mymodel.py: VAE.encode is not implemented")
+        latent = self.encoder(x)
+        mu = self.head_mu(latent)
+        logvar = self.head_logvar(latent)
+        return (mu,logvar)
+        
+        
 
     def reparameterize(self, mu, logvar):
         """Draw z ~ N(mu, diag(exp(logvar))) with the reparameterization
