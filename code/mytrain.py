@@ -35,8 +35,8 @@ def loss_function(x, x_hat, mu, logvar):
     sigma = torch.exp(logvar/2)
     kl = torch.log(1.0 / sigma) + (sigma**2 + mu**2) / 2 - 0.5
     kl = kl.sum() / Batch_size
-    raise NotImplementedError("mytrain.py: loss_function is not implemented")
-
+    loss = recon + kl
+    return loss,recon,kl
 
 def train_one_epoch(model, optimizer, dataloader, device):
     """Train `model` for one epoch, i.e. one pass over `dataloader`.
