@@ -40,7 +40,7 @@ class VAE(nn.Module):
         self.head_mu = nn.nn.Linear(128*4*4,self.latent_dim)
         self.head_logvar = nn.Linear(128 * 4 * 4, self.latent_dim)
 
-        self.decoder_align = nn.Linear( self.latent_dim,128 * 4 * 4)
+        self.decoder_align = nn.Linear(self.latent_dim,128 * 4 * 4)
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(128, 64, 4, 2, 1), nn.ReLU(),   
             nn.ConvTranspose2d(64, 32, 4, 2, 1),  nn.ReLU(),   
@@ -75,8 +75,11 @@ class VAE(nn.Module):
         Returns:
             z, shape (B, latent_dim).
         """
-        # TODO
-        raise NotImplementedError("mymodel.py: VAE.reparameterize is not implemented")
+        
+        # log(sigma 제곱) -> 2log(sigma) /2 후 exp -> std
+        std = torch.exp(logvar/2)
+        eps = torch.randn_like(std)
+        return mu + std*eps
 
     def decode(self, z):
         """Decoder: pixel-wise mean of p(x|z).
@@ -87,8 +90,10 @@ class VAE(nn.Module):
         Returns:
             x_hat, shape (B, 1, 32, 32), values in [0, 1].
         """
-        # TODO
-        raise NotImplementedError("mymodel.py: VAE.decode is not implemented")
+        latent = self.decoder_align(z).view(-1, 128, 4, 4)
+        
+        return self.decoder(latent)
+        
 
     def forward(self, x):
         """Encode x, draw z from q(z|x), and decode z.
@@ -99,5 +104,9 @@ class VAE(nn.Module):
         Returns:
             (x_hat, mu, logvar).
         """
-        # TODO
-        raise NotImplementedError("mymodel.py: VAE.forward is not implemented")
+
+        mu,logvar = self.encode(x)
+        z = self.reparameterize(mu,logvar)
+        x_hat = self.decode(z)
+        return (x_hat, mu, logvar)
+        
