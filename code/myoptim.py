@@ -4,11 +4,13 @@ TODO: choose BATCH_SIZE and NUM_EPOCHS, and complete `get_optimizer`.
 """
 
 import torch
+from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
 
 # Used by the notebook. The values below are only a starting point.
 BATCH_SIZE = 64     # number of images in a mini-batch
 NUM_EPOCHS = 200    # number of passes over the training data
 LR = 1e-3
+EMA_DECAY = 0.995   # exponential moving average of the weights (0 = off)
 
 def get_optimizer(model):
     """Create the optimizer that updates the parameters of `model`.
@@ -22,6 +24,7 @@ def get_optimizer(model):
     Returns:
         a torch.optim.Optimizer.
     """
-    # TODO
-    return torch.optim.Adam(model.parameters(),lr = LR)
-    raise NotImplementedError("myoptim.py: get_optimizer is not implemented")
+    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+    # EMA copy of the model, updated by train_one_epoch after every step.
+    optimizer.ema = AveragedModel(model, multi_avg_fn=get_ema_multi_avg_fn(EMA_DECAY)) if EMA_DECAY else None
+    return optimizer

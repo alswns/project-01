@@ -19,25 +19,42 @@ import torch
 import torch.nn as nn
 
 LATENT_DIM = 16
-RES_BLOCKS = 2   # ResBlocks per resolution (1 or 2)
+ENC_BLOCKS = [2, 2, 2]   # BasicBlocks per layer: 32->16, 16->8, 8->4
+DEC_BLOCKS = [2, 2, 2]   # BasicBlocks per layer: 4->8, 8->16, 16->32
 
 
-class ResBlock(nn.Module):
-    """x + f(x), f = (GroupNorm -> ReLU -> Conv3x3) x 2; keeps the shape."""
+class BasicBlock(nn.Module):
+    """ResNet block: ReLU( GN(conv(ReLU(GN(conv(x))))) + shortcut(x) ).
+    The shortcut is a 1x1 conv + GN when the shape changes."""
 
-    def __init__(self, c):
+    def __init__(self, c_in, c_out, stride=1):
         super().__init__()
         self.f = nn.Sequential(
-            nn.GroupNorm(8, c), nn.ReLU(), nn.Conv2d(c, c, 3, 1, 1),
-            nn.GroupNorm(8, c), nn.ReLU(), nn.Conv2d(c, c, 3, 1, 1),
+            nn.Conv2d(c_in, c_out, 3, stride, 1), nn.GroupNorm(8, c_out), nn.ReLU(),
+            nn.Conv2d(c_out, c_out, 3, 1, 1),      nn.GroupNorm(8, c_out),
         )
+        if stride == 1 and c_in == c_out:
+            self.shortcut = nn.Identity()
+        else:
+            self.shortcut = nn.Sequential(nn.Conv2d(c_in, c_out, 1, stride), nn.GroupNorm(8, c_out))
+        nn.init.zeros_(self.f[-1].weight)   # zero-init: the residual branch starts at 0
 
     def forward(self, x):
-        return x + self.f(x)
+        return torch.relu(self.f(x) + self.shortcut(x))
 
 
-def res(c):
-    return [ResBlock(c) for _ in range(RES_BLOCKS)]
+def make_layer(c_in, c_out, n, resample):
+    """n blocks; the first one changes the channels and the resolution.
+    "down": the first block uses stride 2. "up": nearest x2 upsampling first."""
+    layer = nn.Sequential()
+    if resample == "up":
+        layer.append(nn.Upsample(scale_factor=2))
+        layer.append(BasicBlock(c_in, c_out))
+    else:
+        layer.append(BasicBlock(c_in, c_out, stride=2))
+    for _ in range(n - 1):
+        layer.append(BasicBlock(c_out, c_out))
+    return layer
 
 
 class VAE(nn.Module):
@@ -52,9 +69,10 @@ class VAE(nn.Module):
         super().__init__()
         self.latent_dim = LATENT_DIM
         self.encoder = nn.Sequential(
-            nn.Conv2d(1, 32, 4, 2, 1),   nn.GroupNorm(8, 32),  nn.ReLU(), *res(32),    # 16x16
-            nn.Conv2d(32, 64, 4, 2, 1),  nn.GroupNorm(8, 64),  nn.ReLU(), *res(64),    # 8x8
-            nn.Conv2d(64, 128, 4, 2, 1), nn.GroupNorm(8, 128), nn.ReLU(), *res(128),   # 4x4
+            nn.Conv2d(1, 32, kernel_size=3, padding= 1), nn.GroupNorm(8, 32), nn.ReLU(),   # stem, 32x32
+            make_layer(32, 32, ENC_BLOCKS[0], "down"),                   # 16x16
+            make_layer(32, 64, ENC_BLOCKS[1], "down"),                   # 8x8
+            make_layer(64, 128, ENC_BLOCKS[2], "down"),                  # 4x4
             nn.Flatten(),
         )
         self.head_mu = nn.Linear(128 * 4 * 4, self.latent_dim)
@@ -62,10 +80,10 @@ class VAE(nn.Module):
 
         self.decoder_align = nn.Linear(self.latent_dim, 128 * 4 * 4)
         self.decoder = nn.Sequential(
-            *res(128),
-            nn.Upsample(scale_factor=2), nn.Conv2d(128, 64, 3, 1, 1), nn.GroupNorm(8, 64), nn.ReLU(), *res(64),  # 8x8
-            nn.Upsample(scale_factor=2), nn.Conv2d(64, 32, 3, 1, 1),  nn.GroupNorm(8, 32), nn.ReLU(), *res(32),  # 16x16
-            nn.Upsample(scale_factor=2), nn.Conv2d(32, 1, 3, 1, 1),   nn.Sigmoid(),                           # 32x32
+            make_layer(128, 64, DEC_BLOCKS[0], "up"),                    # 8x8
+            make_layer(64, 32, DEC_BLOCKS[1], "up"),                     # 16x16
+            make_layer(32, 32, DEC_BLOCKS[2], "up"),                     # 32x32
+            nn.Conv2d(32, 1, kernel_size=3, padding= 1), nn.Sigmoid(),
         )
 
     def encode(self, x):

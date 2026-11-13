@@ -56,6 +56,10 @@ def train_one_epoch(model, optimizer, dataloader, device):
         dict {"loss": ..., "recon": ..., "kl": ...} of Python floats: the
         average of each term per image over the whole epoch.
     """
+    ema = getattr(optimizer, "ema", None)
+    if ema is not None and hasattr(optimizer, "live_state"):
+        model.load_state_dict(optimizer.live_state)   # back to the trained weights
+
     model.train()
     n=0
     total_loss = 0
@@ -68,12 +72,20 @@ def train_one_epoch(model, optimizer, dataloader, device):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        if ema is not None:
+            ema.update_parameters(model)
 
         Batch_size = x.size(0)
         total_loss += loss.item() * Batch_size
         total_recon += recon.item() * Batch_size
         total_kl += kl.item() * Batch_size
         n += Batch_size
+
+    # Between epochs (and after training) the model holds the EMA weights,
+    # so the saved model, the samples and the evaluation all use them.
+    if ema is not None:
+        optimizer.live_state = {k: v.clone() for k, v in model.state_dict().items()}
+        model.load_state_dict(ema.module.state_dict())
 
     return {"loss": total_loss / n, "recon": total_recon / n, "kl": total_kl / n}
 
