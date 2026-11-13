@@ -119,7 +119,7 @@ def train_amp(model, opt, x_all, bs, epochs, decay):
     return {"loss": l[0], "recon": l[1], "kl": l[2]}
 
 
-use_amp = dev.type == "cuda" and os.environ.get("AMP", "1") == "1"
+use_amp = dev.type == "cuda" and os.environ.get("AMP", "0") == "1"
 use_graph = not use_amp and dev.type == "cuda" and os.environ.get("GRAPH", "1") == "1"
 t = time.time()
 decay = myoptim.EMA_DECAY if getattr(opt, "ema", None) is not None else 0
