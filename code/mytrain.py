@@ -73,7 +73,7 @@ def train_one_epoch(model, optimizer, dataloader, device):
         total_loss += loss.item() * Batch_size
         total_recon += recon.item() * Batch_size
         total_kl += kl.item() * Batch_size
-        n += B
+        n += Batch_size
 
     return {"loss": total_loss / n, "recon": total_recon / n, "kl": total_kl / n}
 

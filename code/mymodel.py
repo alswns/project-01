@@ -18,7 +18,7 @@ Notation
 import torch
 import torch.nn as nn
 
-
+LATENT_DIM=32
 class VAE(nn.Module):
     def __init__(self):
         """Define the layers of the encoder and of the decoder.
@@ -29,7 +29,7 @@ class VAE(nn.Module):
         Must set `self.latent_dim` (int, at least 2): the dimension of z.
         """
         super().__init__()
-        self.latent_dim = 16
+        self.latent_dim = LATENT_DIM
         # 인코더
         self.encoder=nn.Sequential(
             nn.Conv2d(1, 32, 4, 2, 1),   nn.ReLU(),   
