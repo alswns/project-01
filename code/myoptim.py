@@ -8,7 +8,7 @@ import torch
 # Used by the notebook. The values below are only a starting point.
 BATCH_SIZE = 64     # number of images in a mini-batch
 NUM_EPOCHS = 100    # number of passes over the training data
-
+LR = 1e-3
 
 def get_optimizer(model):
     """Create the optimizer that updates the parameters of `model`.
@@ -23,4 +23,5 @@ def get_optimizer(model):
         a torch.optim.Optimizer.
     """
     # TODO
+    return torch.optim.Adam(model.parameters(),lr = LR)
     raise NotImplementedError("myoptim.py: get_optimizer is not implemented")
