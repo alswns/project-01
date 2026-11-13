@@ -29,6 +29,12 @@ def loss_function(x, x_hat, mu, logvar):
         (loss, recon, kl): three scalar tensors.
     """
     # TODO
+    Batch_size = x.size(0)
+    recon = F.binary_cross_entropy(x_hat,x,reduction="sum") / Batch_size
+    #가우시안 KL 
+    sigma = torch.exp(logvar/2)
+    kl = torch.log(1.0 / sigma) + (sigma**2 + mu**2) / 2 - 0.5
+    kl = kl.sum() / Batch_size
     raise NotImplementedError("mytrain.py: loss_function is not implemented")
 
 
