@@ -32,9 +32,9 @@ class VAE(nn.Module):
         self.latent_dim = LATENT_DIM
         # 인코더
         self.encoder=nn.Sequential(
-            nn.Conv2d(1, 32, 4, 2, 1),   nn.ReLU(),   
-            nn.Conv2d(32, 64, 4, 2, 1),  nn.ReLU(),   
-            nn.Conv2d(64, 128, 4, 2, 1), nn.ReLU(),   
+            nn.Conv2d(1, 32, 4, 2, 1),nn.BatchNorm2d(32),   nn.ReLU(),   
+            nn.Conv2d(32, 64, 4, 2, 1),nn.BatchNorm2d(64),  nn.ReLU(),   
+            nn.Conv2d(64, 128, 4, 2, 1),nn.BatchNorm2d(128), nn.ReLU(),   
             nn.Flatten(),                              
         )
         self.head_mu = nn.Linear(128*4*4,self.latent_dim)
@@ -42,8 +42,8 @@ class VAE(nn.Module):
 
         self.decoder_align = nn.Linear(self.latent_dim,128 * 4 * 4)
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(128, 64, 4, 2, 1), nn.ReLU(),   
-            nn.ConvTranspose2d(64, 32, 4, 2, 1),  nn.ReLU(),   
+            nn.ConvTranspose2d(128, 64, 4, 2, 1),nn.BatchNorm2d(64), nn.ReLU(),   
+            nn.ConvTranspose2d(64, 32, 4, 2, 1),nn.BatchNorm2d(32),  nn.ReLU(),   
             nn.ConvTranspose2d(32, 1, 4, 2, 1),   nn.Sigmoid() 
         )
 
