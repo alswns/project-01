@@ -89,9 +89,43 @@ def train_graph(model, opt, x_all, bs, epochs, decay):
     return {"loss": l[0], "recon": l[1], "kl": l[2]}
 
 
-use_graph = dev.type == "cuda" and os.environ.get("GRAPH", "1") == "1"
+def train_amp(model, opt, x_all, bs, epochs, decay):
+    """Same training as train_one_epoch x epochs, but the forward pass runs in fp16 autocast
+    (T4 tensor cores) with a GradScaler; the loss itself is computed in fp32."""
+    params = list(model.parameters())
+    ema = [p.detach().clone() for p in params] if decay else None
+    scaler = torch.amp.GradScaler("cuda")
+    n = len(x_all); acc = torch.zeros(3, device=x_all.device); first = True
+    model.train()
+    for e in range(epochs):
+        if e == epochs - 1: acc.zero_()
+        xp = x_all[torch.randperm(n, device=x_all.device)]
+        for i in range(0, n, bs):
+            x = xp[i:i + bs]
+            with torch.autocast("cuda", dtype=torch.float16):
+                x_hat, mu, logvar = model(x)
+            loss, recon, kl = loss_function(x, x_hat.float(), mu.float(), logvar.float())
+            opt.zero_grad(set_to_none=True)
+            scaler.scale(loss).backward()
+            scaler.step(opt); scaler.update()
+            if ema is not None:
+                ps = [p.detach() for p in params]
+                torch._foreach_copy_(ema, ps) if first else torch._foreach_lerp_(ema, ps, 1 - decay)
+            first = False
+            acc.add_(torch.stack([loss, recon, kl]).detach() * x.shape[0])
+    if ema is not None:
+        with torch.no_grad(): torch._foreach_copy_(params, ema)
+    l = (acc / n).tolist()
+    return {"loss": l[0], "recon": l[1], "kl": l[2]}
+
+
+use_amp = dev.type == "cuda" and os.environ.get("AMP", "1") == "1"
+use_graph = not use_amp and dev.type == "cuda" and os.environ.get("GRAPH", "1") == "1"
 t = time.time()
-if use_graph:
+decay = myoptim.EMA_DECAY if getattr(opt, "ema", None) is not None else 0
+if use_amp:
+    l = train_amp(model, opt, loader.x, BATCH_SIZE, NUM_EPOCHS, decay)
+elif use_graph:
     decay = myoptim.EMA_DECAY if getattr(opt, "ema", None) is not None else 0
     l = train_graph(model, opt, loader.x, BATCH_SIZE, NUM_EPOCHS, decay)
 else:
@@ -103,7 +137,7 @@ r = evaluate(model)
 out = dict(variant=variant, seed=seed, fid=round(r["fid"], 2), rec=round(r["reconstruction_error"], 2),
            loss=round(l["loss"], 1), recon=round(l["recon"], 1), kl=round(l["kl"], 1),
            params=sum(p.numel() for p in model.parameters()), train_s=round(tt), total_s=round(time.time() - t),
-           device=torch.cuda.get_device_name() if dev.type == "cuda" else "cpu", graph=use_graph)
+           device=torch.cuda.get_device_name() if dev.type == "cuda" else "cpu", graph=use_graph, amp=use_amp)
 print(json.dumps(out), flush=True)
 with open(os.path.join(HERE, "results.jsonl"), "a") as f:
     f.write(json.dumps(out) + "\n")
