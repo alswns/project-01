@@ -31,13 +31,13 @@ class VAE(nn.Module):
         super().__init__()
         self.latent_dim = 16
         # 인코더
-        self.encoder=nn.nn.Sequential(
+        self.encoder=nn.Sequential(
             nn.Conv2d(1, 32, 4, 2, 1),   nn.ReLU(),   
             nn.Conv2d(32, 64, 4, 2, 1),  nn.ReLU(),   
             nn.Conv2d(64, 128, 4, 2, 1), nn.ReLU(),   
             nn.Flatten(),                              
         )
-        self.head_mu = nn.nn.Linear(128*4*4,self.latent_dim)
+        self.head_mu = nn.Linear(128*4*4,self.latent_dim)
         self.head_logvar = nn.Linear(128 * 4 * 4, self.latent_dim)
 
         self.decoder_align = nn.Linear(self.latent_dim,128 * 4 * 4)
