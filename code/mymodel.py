@@ -18,7 +18,34 @@ Notation
 import torch
 import torch.nn as nn
 
-LATENT_DIM=32
+LATENT_DIM = 32
+
+
+class ResBlock(nn.Module):
+    def __init__(self, c_in, c_out, stride=1):
+        super().__init__()
+        self.f = nn.Sequential(
+            nn.Conv2d(c_in, c_out, 3, stride, 1), nn.GroupNorm(8, c_out), nn.ReLU(),
+            nn.Conv2d(c_out, c_out, 3, 1, 1), nn.GroupNorm(8, c_out),
+        )
+        if stride == 1 and c_in == c_out:
+            self.shortcut = nn.Identity()
+        else:
+            self.shortcut = nn.Sequential(nn.Conv2d(c_in, c_out, 1, stride), nn.GroupNorm(8, c_out))
+        nn.init.zeros_(self.f[-1].weight)
+
+    def forward(self, x):
+        return torch.relu(self.f(x) + self.shortcut(x))
+
+
+def down(c_in, c_out):
+    return nn.Sequential(ResBlock(c_in, c_out, 2), ResBlock(c_out, c_out))
+
+
+def up(c_in, c_out):
+    return nn.Sequential(nn.Upsample(scale_factor=2), ResBlock(c_in, c_out), ResBlock(c_out, c_out))
+
+
 class VAE(nn.Module):
     def __init__(self):
         """Define the layers of the encoder and of the decoder.
@@ -30,24 +57,23 @@ class VAE(nn.Module):
         """
         super().__init__()
         self.latent_dim = LATENT_DIM
-        # 인코더
-        self.encoder=nn.Sequential(
-            nn.Conv2d(1, 32, 4, 2, 1),   nn.ReLU(),   
-            nn.Conv2d(32, 64, 4, 2, 1),  nn.ReLU(),   
-            nn.Conv2d(64, 128, 4, 2, 1), nn.ReLU(),   
-            nn.Flatten(),                              
+        self.encoder = nn.Sequential(
+            nn.Conv2d(1, 32, 3, 1, 1), nn.GroupNorm(8, 32), nn.ReLU(),
+            down(32, 32),
+            down(32, 64),
+            down(64, 128),
+            nn.Flatten(),
         )
-        self.head_mu = nn.Linear(128*4*4,self.latent_dim)
+        self.head_mu = nn.Linear(128 * 4 * 4, self.latent_dim)
         self.head_logvar = nn.Linear(128 * 4 * 4, self.latent_dim)
 
-        self.decoder_align = nn.Linear(self.latent_dim,128 * 4 * 4)
+        self.decoder_align = nn.Linear(self.latent_dim, 128 * 4 * 4)
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(128, 64, 4, 2, 1), nn.ReLU(),   
-            nn.ConvTranspose2d(64, 32, 4, 2, 1),  nn.ReLU(),   
-            nn.ConvTranspose2d(32, 1, 4, 2, 1),   nn.Sigmoid() 
+            up(128, 64),
+            up(64, 32),
+            up(32, 32),
+            nn.Conv2d(32, 1, 3, 1, 1), nn.Sigmoid(),
         )
-
-        
 
     def encode(self, x):
         """Encoder: parameters of q(z|x) = N(z; mu, diag(exp(logvar))).
