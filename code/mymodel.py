@@ -18,7 +18,7 @@ Notation
 import torch
 import torch.nn as nn
 
-LATENT_DIM = 32
+LATENT_DIM = 24
 
 
 class ResBlock(nn.Module):
