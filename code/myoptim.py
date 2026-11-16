@@ -23,5 +23,7 @@ def get_optimizer(model):
         a torch.optim.Optimizer.
     """
     # TODO
-    return torch.optim.Adam(model.parameters(),lr = LR)
+    optimizer = torch.optim.Adam(model.parameters(),lr = LR)
+    optimizer.epoch = 0
+    return optimizer
     raise NotImplementedError("myoptim.py: get_optimizer is not implemented")

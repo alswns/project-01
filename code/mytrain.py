@@ -3,8 +3,32 @@
 TODO: complete `loss_function` and `train_one_epoch`.
 """
 
+import math
 import torch
 import torch.nn.functional as F
+from myoptim import NUM_EPOCHS
+
+AUG_P = 0.5
+AUG_FRAC = 0.9
+AUG_ROT, AUG_SCALE, AUG_SHIFT, AUG_SHEAR = 8, 0.1, 1.0 / 16, 0.1
+
+
+def augment(x):
+    B, d = x.size(0), x.device
+    a = (torch.rand(B, device=d) * 2 - 1) * AUG_ROT * math.pi / 180
+    s = 1 + (torch.rand(B, device=d) * 2 - 1) * AUG_SCALE
+    sh = (torch.rand(B, device=d) * 2 - 1) * AUG_SHEAR
+    t = (torch.rand(B, 2, device=d) * 2 - 1) * AUG_SHIFT
+    theta = torch.zeros(B, 2, 3, device=d)
+    theta[:, 0, 0] = torch.cos(a) / s
+    theta[:, 0, 1] = (-torch.sin(a) + sh) / s
+    theta[:, 1, 0] = torch.sin(a) / s
+    theta[:, 1, 1] = torch.cos(a) / s
+    theta[:, :, 2] = t
+    grid = F.affine_grid(theta, x.shape, align_corners=False)
+    xa = F.grid_sample(x, grid, align_corners=False, padding_mode="zeros").clamp(0, 1)
+    keep = torch.rand(B, 1, 1, 1, device=d) >= AUG_P
+    return torch.where(keep, x, xa)
 
 
 def loss_function(x, x_hat, mu, logvar):
@@ -57,12 +81,16 @@ def train_one_epoch(model, optimizer, dataloader, device):
         average of each term per image over the whole epoch.
     """
     model.train()
+    epoch = optimizer.epoch
+    use_aug = epoch < AUG_FRAC * NUM_EPOCHS
     n=0
     total_loss = 0
     total_recon = 0
     total_kl = 0
     for x in dataloader:
         x=x.to(device)
+        if use_aug:
+            x = augment(x)
         x_hat,mu,logvar = model(x)
         loss, recon, kl = loss_function(x,x_hat,mu,logvar)
         optimizer.zero_grad()
@@ -75,5 +103,6 @@ def train_one_epoch(model, optimizer, dataloader, device):
         total_kl += kl.item() * Batch_size
         n += Batch_size
 
+    optimizer.epoch += 1
     return {"loss": total_loss / n, "recon": total_recon / n, "kl": total_kl / n}
 
