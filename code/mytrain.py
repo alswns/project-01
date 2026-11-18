@@ -6,7 +6,20 @@ TODO: complete `loss_function` and `train_one_epoch`.
 import math
 import torch
 import torch.nn.functional as F
-from myoptim import NUM_EPOCHS
+from myoptim import NUM_EPOCHS, LR
+
+WARMUP = 5
+LR_MIN = 0.02
+
+
+def set_lr(optimizer, epoch):
+    if epoch < WARMUP:
+        f = (epoch + 1) / WARMUP
+    else:
+        f = LR_MIN + (1 - LR_MIN) * 0.5 * (1 + math.cos(math.pi * (epoch - WARMUP) / (NUM_EPOCHS - WARMUP)))
+    for g in optimizer.param_groups:
+        g["lr"] = LR * f
+
 
 AUG_P = 0.5
 AUG_FRAC = 0.9
@@ -83,6 +96,7 @@ def train_one_epoch(model, optimizer, dataloader, device):
     model.train()
     epoch = optimizer.epoch
     use_aug = epoch < AUG_FRAC * NUM_EPOCHS
+    set_lr(optimizer, epoch)
     n=0
     total_loss = 0
     total_recon = 0
