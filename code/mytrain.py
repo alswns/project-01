@@ -8,6 +8,8 @@ import torch
 import torch.nn.functional as F
 from myoptim import NUM_EPOCHS, LR
 
+K = 4
+
 WARMUP = 5
 LR_MIN = 0.02
 
@@ -105,7 +107,10 @@ def train_one_epoch(model, optimizer, dataloader, device):
         x=x.to(device)
         if use_aug:
             x = augment(x)
-        x_hat,mu,logvar = model(x)
+        mu, logvar = model.encode(x)
+        x, mu, logvar = x.repeat(K, 1, 1, 1), mu.repeat(K, 1), logvar.repeat(K, 1)
+        z = model.reparameterize(mu, logvar)
+        x_hat = model.decode(z)
         loss, recon, kl = loss_function(x,x_hat,mu,logvar)
         optimizer.zero_grad()
         loss.backward()
